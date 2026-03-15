@@ -28,34 +28,36 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Prepare Source File
+- name: Prepare Source File
         run: |
           mkdir -p ./source
-          # 下载并简单清洗数据（去除注释和空行）
+          # 直接将下载的文件命名为 custom-cn.txt，工具会以此作为产物前缀
           curl -sSL ${{ env.SOURCE_URL }} | grep -v '^#' | sed '/^$/d' > ./source/custom-cn.txt
 
       - name: Build Rules (YAML, MRS, JSON, SRS)
         run: |
           mkdir -p ./publish/meta
           mkdir -p ./publish/sing
+          
+          # 获取当前绝对路径以防转换工具找不到文件
+          ROOT_DIR=$(pwd)
+          
           cd convert
           
-          # 1. 生成 Meta 格式 (YAML & MRS)
-          # 注意：converter 默认行为可能因版本而异，这里假设其标准转换逻辑
-          go run ./ geosite -f ../source/custom-cn.txt -o ../publish/meta -n custom-cn
+          # 1. 生成 Meta 格式 (默认输出 yaml 和 mrs)
+          # 移除 -n 参数，工具会读取文件名 custom-cn
+          go run ./ geosite -f $ROOT_DIR/source/custom-cn.txt -o $ROOT_DIR/publish/meta
           
-          # 2. 生成 Sing-box 格式 (JSON & SRS)
-          # 使用 -t sing-box 参数生成 sing-box 适配的产物
-          go run ./ geosite -f ../source/custom-cn.txt -o ../publish/sing -n custom-cn -t sing-box
+          # 2. 生成 Sing-box 格式 (json 和 srs)
+          go run ./ geosite -f $ROOT_DIR/source/custom-cn.txt -o $ROOT_DIR/publish/sing -t sing-box
 
       - name: Organize Artifacts
         run: |
-          # 整理所有产物到统一目录，确保只保留要求的后缀
           mkdir -p ./final_release
-          cp ./publish/meta/custom-cn.yaml ./final_release/
-          cp ./publish/meta/custom-cn.mrs ./final_release/
-          cp ./publish/sing/custom-cn.json ./final_release/
-          cp ./publish/sing/custom-cn.srs ./final_release/
+          # 根据工具行为，产物通常在指定的 -o 目录下
+          # 如果工具生成了子文件夹，请根据实际 ls 结果微调 cp 命令
+          cp ./publish/meta/* ./final_release/
+          cp ./publish/sing/* ./final_release/
           
           cd ./final_release
           sha256sum * > sha256sum.txt
