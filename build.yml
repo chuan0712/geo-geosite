@@ -1,0 +1,73 @@
+name: Build Refined Rules
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 22 * * *"
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set variables
+        run: |
+          echo "BUILDTIME=$(TZ=Asia/Shanghai date +'%Y-%m-%d %H:%M')" >> $GITHUB_ENV
+          echo "SOURCE_URL=https://static-file-global.353355.xyz/rules/cn-additional-list.txt" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Checkout Converter
+        uses: actions/checkout@v4
+        with:
+          repository: MetaCubeX/meta-rules-converter
+          path: convert
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Prepare Source File
+        run: |
+          mkdir -p ./source
+          # 下载并简单清洗数据（去除注释和空行）
+          curl -sSL ${{ env.SOURCE_URL }} | grep -v '^#' | sed '/^$/d' > ./source/custom-cn.txt
+
+      - name: Build Rules (YAML, MRS, JSON, SRS)
+        run: |
+          mkdir -p ./publish/meta
+          mkdir -p ./publish/sing
+          cd convert
+          
+          # 1. 生成 Meta 格式 (YAML & MRS)
+          # 注意：converter 默认行为可能因版本而异，这里假设其标准转换逻辑
+          go run ./ geosite -f ../source/custom-cn.txt -o ../publish/meta -n custom-cn
+          
+          # 2. 生成 Sing-box 格式 (JSON & SRS)
+          # 使用 -t sing-box 参数生成 sing-box 适配的产物
+          go run ./ geosite -f ../source/custom-cn.txt -o ../publish/sing -n custom-cn -t sing-box
+
+      - name: Organize Artifacts
+        run: |
+          # 整理所有产物到统一目录，确保只保留要求的后缀
+          mkdir -p ./final_release
+          cp ./publish/meta/custom-cn.yaml ./final_release/
+          cp ./publish/meta/custom-cn.mrs ./final_release/
+          cp ./publish/sing/custom-cn.json ./final_release/
+          cp ./publish/sing/custom-cn.srs ./final_release/
+          
+          cd ./final_release
+          sha256sum * > sha256sum.txt
+
+      - name: Git Push to Release Branch
+        run: |
+          cd final_release
+          git init
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "Update rules: ${{ env.BUILDTIME }}"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git push -f origin release
