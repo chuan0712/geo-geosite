@@ -28,11 +28,11 @@ jobs:
         with:
           go-version: '1.22'
 
-- name: Prepare Source File
-        run: |
-          mkdir -p ./source
-          # 直接将下载的文件命名为 custom-cn.txt，工具会以此作为产物前缀
-          curl -sSL ${{ env.SOURCE_URL }} | grep -v '^#' | sed '/^$/d' > ./source/custom-cn.txt
+      - name: Prepare Source File
+              run: |
+                mkdir -p ./source
+                # 直接将下载的文件命名为 custom-cn.txt，工具会以此作为产物前缀
+                curl -sSL ${{ env.SOURCE_URL }} | grep -v '^#' | sed '/^$/d' > ./source/custom-cn.txt
 
       - name: Build Rules (YAML, MRS, JSON, SRS)
         run: |
